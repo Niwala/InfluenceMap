@@ -1,5 +1,7 @@
 # InfluenceMap
- Attempt to make an influence map like the one in Endless space.
+ Attempt to make an influence map in Unity like the one in Endless space.
+ 
+ *The processing is practically only on GPU, The c# code is just to send the positions and launch the blits.*
 
 ![Kpxi7sArxr](https://user-images.githubusercontent.com/23404599/124132915-99266a00-da81-11eb-8a5c-3a5195fd11fa.gif)
 
