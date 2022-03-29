@@ -52,8 +52,8 @@ public class MetaballsBlitter : MonoBehaviour
 
     private void OnEnable()
     {
-        texA = new RenderTexture(512, 512, 0, RenderTextureFormat.ARGBFloat);
-        texB = new RenderTexture(512, 512, 0, RenderTextureFormat.ARGBFloat);
+        texA = new RenderTexture(textureSize, textureSize, 0, RenderTextureFormat.ARGBFloat);
+        texB = new RenderTexture(textureSize, textureSize, 0, RenderTextureFormat.ARGBFloat);
         emitterInfosBuffer = new ComputeBuffer(maxEmitterCount, EmitterInfos.stride);
         emitterInfosArray = new EmitterInfos[maxEmitterCount];
     }
@@ -112,7 +112,7 @@ public class MetaballsBlitter : MonoBehaviour
         Graphics.Blit(swap ? texB : texA, swap ? texA : texB, blitter, 1);
         swap = !swap;
 
-        /*
+        
         //Vertical blur
         blitter.SetVector("_BlurRange", new Vector4(0.0f, blurRange, 0.0f, 0.0f));
         blitter.SetInt("_BlurItterations", blurItterations);
@@ -125,7 +125,6 @@ public class MetaballsBlitter : MonoBehaviour
         Graphics.Blit(swap ? texB : texA, swap ? texA : texB, blitter, 2);
         swap = !swap;
 
-
         //Isolate edges
         blitter.SetFloat("_EdgeThickness", edgeThickness);
         blitter.SetColor("_RedChannelColor", redChannelColor);
@@ -133,7 +132,7 @@ public class MetaballsBlitter : MonoBehaviour
         blitter.SetColor("_BlueChannelColor", blueChannelColor);
         blitter.SetColor("_AlphaChannelColor", alphaChannelColor);
         Graphics.Blit(swap ? texB : texA, swap ? texA : texB, blitter, 3);
-        swap = !swap;*/
+        swap = !swap;
 
 
         //Draw result on the renderer

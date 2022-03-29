@@ -1,0 +1,145 @@
+#pragma kernel Clear
+#pragma kernel AsignAreas
+#pragma kernel Flatten
+#pragma kernel JumpFlooding
+#pragma kernel Render
+
+struct Emitter
+{
+    float3 position;
+    float radius;
+    int channel;
+};
+
+float _Metaball_Smooth;
+int _EmitterCount;
+StructuredBuffer<Emitter> _Emitters;
+RWStructuredBuffer<float4> _Distances;
+uint _ChannelCount;
+float2 _InvMapSize;
+RWTexture2D<float4> _Result;
+int _MapSize;
+float4 _Colors[16];
+int _JumpFloodingStepCount;
+int _JumpFloodingStep;
+float _BorderSize;
+
+//smin from Inigo Quilez
+float smin(float a, float b, float k)
+{
+    float res = exp2(-k * a) + exp2(-k * b);
+    return -log2(res) / k;
+}
+
+[numthreads(8, 8, 8)]
+void Clear(uint3 id : SV_DispatchThreadID)
+{
+    int i = id.z * _MapSize * _MapSize + id.x * _MapSize + id.y;
+    _Distances[i] = float4(1, 1, id.xy * _InvMapSize);
+}
+
+[numthreads(8,8,1)]
+void AsignAreas (uint3 id : SV_DispatchThreadID)
+{
+    float2 pos = id.xy * _InvMapSize * 2.0 - 1.0;
+
+    for (uint j = 0; j < _EmitterCount; j++)
+    {
+        Emitter emitter = _Emitters[j];
+        float dist = distance(pos, emitter.position.xz);
+        float factor = dist - emitter.radius;
+
+        int i = emitter.channel * _MapSize * _MapSize + id.x * _MapSize + id.y;
+        _Distances[i].x = smin(_Distances[i].x, factor, _Metaball_Smooth);
+    }
+}
+
+[numthreads(8, 8, 1)]
+void Flatten(uint3 id : SV_DispatchThreadID)
+{
+    float distance = 1;
+    int channel = -1;
+
+    for (uint j = 0; j < _ChannelCount; j++)
+    {
+        int i = j * _MapSize * _MapSize + id.x * _MapSize + id.y;
+        if (_Distances[i].x < distance)
+        {
+            distance = _Distances[i].x;
+            channel = j;
+        }
+    }
+
+    for (uint j = 0; j < _ChannelCount; j++)
+    {
+        int i = j * _MapSize * _MapSize + id.x * _MapSize + id.y;
+        if (j == channel && _Distances[i].x < 0)
+            _Distances[i].yzw = 999.0;
+        else
+            _Distances[i].y = 0.0;
+    }
+}
+
+
+[numthreads(8, 8, 8)]
+void JumpFlooding(uint3 id : SV_DispatchThreadID)
+{
+    float level = clamp(_JumpFloodingStep - 1.0, 0.0, _JumpFloodingStepCount);
+    int stepwidth = int(exp2(_JumpFloodingStepCount - level) + 0.5);
+
+    int2 tc = id.xy;
+
+    float best_dist = 999.0;
+    float2 best_coord = float2(0.0, 0.0);
+    float2 center = float2(id.xy * _InvMapSize);
+
+    for (int y = -1; y <= 1; ++y) 
+    {
+        for (int x = -1; x <= 1; ++x) 
+        {
+            int2 fc = tc + int2(x, y) * stepwidth;
+            float4 ntc = _Distances[id.z * _MapSize * _MapSize + clamp(fc.x, 0, _MapSize - 1) * _MapSize + clamp(fc.y, 0, _MapSize - 1)];
+            float d = length(ntc.zw - center);
+            if (d < best_dist) 
+            {
+                best_dist = d;
+                best_coord = ntc.zw;
+            }
+        }
+    }
+
+    int i = id.z * _MapSize * _MapSize + id.x * _MapSize + id.y;
+    _Distances[i].zw = best_coord;
+    _Distances[i].y = best_dist;
+}
+
+[numthreads(8, 8, 1)]
+void Render(uint3 id : SV_DispatchThreadID)
+{
+    float4 color = 0.0;
+    float alpha = 0.0;
+    float distance = 999.0;
+    float4 values = 0.0.xxxx;
+
+    for (uint j = 0; j < _ChannelCount; j++)
+    {
+        int i = j * _MapSize * _MapSize + id.x * _MapSize + id.y;
+
+        if (_Distances[i].x < distance)
+        {
+            distance = _Distances[i].x;
+            color = _Colors[j];
+            alpha = _Distances[i].y;
+            values = _Distances[i];
+        }
+    }
+
+    float shape = step(values.x, 0.0);
+    float border = step(values.y, _BorderSize) * shape;
+    float fade = saturate(1.0 - values.y * 5);
+    fade *= fade;
+    fade *= 0.5;
+    shape *= fade;
+
+    _Result[id.xy] = color * max(shape, border);
+}
