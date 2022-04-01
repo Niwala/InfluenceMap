@@ -1,7 +1,7 @@
 # InfluenceMap
  Attempt to make an influence map in Unity like the one in Endless space.
  
- *The processing is practically only on GPU, The c# code is just to send the positions and launch the blits.*
+ *This project is a proof of concept. A small personal challenge. The code is delivered as is and no big optimization has been done on it.*
 
 ![Kpxi7sArxr](https://user-images.githubusercontent.com/23404599/124132915-99266a00-da81-11eb-8a5c-3a5195fd11fa.gif)
 
@@ -35,3 +35,17 @@ This gives me clean blobs where the zones do not overlap.
 ![Unity_iDYWt0fMDG](https://user-images.githubusercontent.com/23404599/124138332-d6d9c180-da86-11eb-9683-94f33e723710.png)
 
 *Here I use custom colors by channels, so I could put white instead of the alpha channel.*
+
+
+# Second version
+
+I made a second version in an attempt not to be limited to 4 colors.
+I also replaced the blur by a jumpFlooding, in order to have a fast result for the gradients and more exact borders between the blobs.
+
+This version relies much more on a compute shader & compute buffer. It can potentially become very heavy quickly.
+In the other hand, it should be possible to easily compute it on a small buffer and resized afterwards only for the last step.
+
+https://user-images.githubusercontent.com/23404599/161350056-9a435677-5451-490f-a72a-3863a6f5668f.mp4
+
+![vlc_WcpmQUuGqQ](https://user-images.githubusercontent.com/23404599/161350030-3aba141e-36ff-4314-a908-5f30466150d1.gif)
+
