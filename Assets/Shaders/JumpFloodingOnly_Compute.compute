@@ -1,0 +1,244 @@
+#pragma kernel Clear
+#pragma kernel AsignAreas
+#pragma kernel Flatten
+#pragma kernel JumpFlooding
+#pragma kernel Render
+
+struct Emitter
+{
+	float3 position;
+	float radius;
+	int channel;
+};
+
+struct AreaID
+{
+	float distance;
+	int channel;
+	int2 remap;
+};
+
+float _Metaball_Smooth;
+int _EmitterCount;
+StructuredBuffer<Emitter> _Emitters;
+RWStructuredBuffer<float4> _Distances;
+RWStructuredBuffer<AreaID> _AreaIds;
+uint _ChannelCount;
+float2 _InvMapSize;
+RWTexture2D<float4> _Result;
+int _MapSize;
+float4 _Colors[16];
+int _JumpFloodingStepCount;
+int _JumpFloodingStep;
+float _BorderSize;
+
+//smin from Inigo Quilez
+float smin(float a, float b, float k)
+{
+	float res = exp2(-k * a) + exp2(-k * b);
+	return -log2(res) / k;
+}
+
+[numthreads(8, 8, 8)]
+void Clear(uint3 id : SV_DispatchThreadID)
+{
+	int i = id.x * _MapSize + id.y;    
+	
+	AreaID areaID;
+	areaID.distance = 999;
+	areaID.channel = 0;
+	areaID.remap = int2(999, 999);
+	_AreaIds[i] = areaID;
+}
+
+[numthreads(8, 8, 1)]
+void AsignAreas(uint3 id : SV_DispatchThreadID)
+{
+	float2 pos = id.xy * _InvMapSize * 2.0 - 1.0;
+
+	for (uint j = 0; j < _EmitterCount; j++)
+	{
+		Emitter emitter = _Emitters[j];
+		float dist = distance(pos, emitter.position.xz);
+		float factor = dist - emitter.radius;
+
+		int i = emitter.channel * _MapSize * _MapSize + id.x * _MapSize + id.y;
+        //_Distances[i].x = smin(_Distances[i].x, factor, _Metaball_Smooth);
+        
+		if (factor < _AreaIds[id.x * _MapSize + id.y].distance)
+		{
+			_AreaIds[id.x * _MapSize + id.y].distance = factor;
+			_AreaIds[id.x * _MapSize + id.y].channel = emitter.channel + 1;
+			
+			if (factor < 0)
+				_AreaIds[id.x * _MapSize + id.y].remap = id.xy;
+			else
+				_AreaIds[id.x * _MapSize + id.y].distance = 99;
+			//_Distances[id.x * _MapSize + id.y].x = factor;
+		}
+	}
+}
+
+[numthreads(8, 8, 1)]
+void Flatten(uint3 id : SV_DispatchThreadID)
+{
+	float distance = 1;
+	int channel = -1;
+
+    //for (uint j = 0; j < _ChannelCount; j++)
+    //{
+    //    int i = id.x * _MapSize + id.y;
+    //    if (_Distances[i].x < distance)
+    //    {
+    //        distance = _Distances[i].x;
+    //        channel = j;
+    //    }
+    //}
+
+    //for (uint j = 0; j < _ChannelCount; j++)
+  //  {
+  //      int i = id.x * _MapSize + id.y;
+		//if (_Distances[i].x < 0)
+  //          _Distances[i].yzw = 999.0;
+  //      else
+  //          _Distances[i].y = 0.0;
+  //  }
+  
+	int i = id.x * _MapSize + id.y;
+	if (_Distances[i].x > 0)
+		_Distances[i].zw = float2(999, -999);
+}
+
+
+[numthreads(8, 8, 1)]
+void JumpFlooding(uint3 id : SV_DispatchThreadID)
+{
+	//Step count : 9     9^2 = 512
+	//_JumpFloodingStep = i + 1 in the loop (So it start at 1)
+
+	float level = clamp(_JumpFloodingStep, 0.0, 9);
+	int stepwidth = int(exp2(9 - level));
+
+	int2 pos = id.xy;
+	int i = id.x * _MapSize + id.y;
+	AreaID cv = _AreaIds[i];
+	//float4 ctc = _Distances[i];
+
+
+	float best_dist = cv.distance;
+	int best_area = cv.channel;
+	float2 best_coord = cv.remap;
+
+	if (best_dist < 0)
+		return;
+	
+	
+    //Current value
+    
+    
+	for (int y = -1; y <= 1; ++y)
+	{
+		for (int x = -1; x <= 1; ++x)
+		{
+			int posX = pos.x + x * stepwidth;
+			int posY = pos.y + y * stepwidth;
+			
+			if (posX < 0 || posX >= _MapSize)
+				continue;
+				
+			if (posY < 0 || posY >= _MapSize)
+				continue;
+			            
+            //Neighbor value
+			int j = posX * _MapSize + posY;
+			AreaID nv = _AreaIds[j];
+			float d = distance(float2(nv.remap) * _InvMapSize, float2(pos) * _InvMapSize);
+            
+            //Inside shape - Try to take the biggest value
+			//if (cv.distance < 0.0)
+			//{
+			//	if (d > best_dist)
+			//	{
+			//		best_coord = ntc.zw;
+			//		best_dist = d;
+			//		best_area = nv.channel;
+			//	}
+
+			//}
+			//else
+			//{
+			//	if (d < best_dist)
+			//	{
+			//		best_coord = ntc.zw;
+			//		best_dist = d;
+			//		best_area = nv.channel;
+			//	}
+
+			//}
+            
+			//float4 ntc = _Distances[id.z * _MapSize * _MapSize + clamp(fc.x, 0, _MapSize - 1) * _MapSize + clamp(fc.y, 0, _MapSize - 1)];
+			//float d = length(ntc.zw - center);
+			if (d < best_dist)
+			{
+				best_dist = d;
+				best_coord = nv.remap;
+				best_area = nv.channel;
+
+			}
+		}
+	}
+	
+	cv.distance = best_dist;
+	cv.channel = best_area;
+	cv.remap = best_coord;
+	_AreaIds[i] = cv;
+
+    //int i = id.z * _MapSize * _MapSize + id.x * _MapSize + id.y;
+	//if (id.x >= _MapSize || id.y >= _MapSize)
+	//	return;
+    
+	//if (_Distances[i].x > 0)
+	//{
+	//	_Distances[i].zw = best_coord;
+	//	_Distances[i].y = best_dist;
+	//}
+}
+
+[numthreads(8, 8, 1)]
+void Render(uint3 id : SV_DispatchThreadID)
+{
+	float2 nearestUV = _Distances[id.x * _MapSize + id.y].zw;
+	AreaID area = _AreaIds[id.x * _MapSize + id.y];
+	float4 distances = _Distances[id.x * _MapSize + id.y];
+    
+	_Result[id.xy] = _Colors[area.channel - 1] * step(area.distance, -0.01);
+	//_Result[id.xy] = _Colors[area.channel];
+	return;
+
+	float4 color = 0.0;
+	float alpha = 0.0;
+	float distance = 999.0;
+	float4 values = 0.0.xxxx;
+
+	for (uint j = 0; j < _ChannelCount; j++)
+	{
+		int i = j * _MapSize * _MapSize + id.x * _MapSize + id.y;
+
+		if (_Distances[i].x < distance)
+		{
+			distance = _Distances[i].x;
+			color = _Colors[j];
+			alpha = _Distances[i].y;
+			values = _Distances[i];
+		}
+	}
+
+	float shape = step(values.x, 0.0);
+	float border = step(values.y, _BorderSize) * shape;
+	float fade = saturate(1.0 - values.y * 5);
+	fade *= fade;
+	fade *= 0.5;
+	shape *= fade;
+
+	_Result[id.xy] = color * max(shape, border);
+}

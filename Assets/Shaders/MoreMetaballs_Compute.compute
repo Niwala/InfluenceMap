@@ -3,7 +3,14 @@
 #pragma kernel Flatten
 #pragma kernel JumpFlooding
 #pragma kernel Render
+#pragma kernel RenderData
 
+
+//#define RenderTexBorders	//Remove the comment to add borders on the edges of the renderTexture.
+#define MaxValue 999
+
+
+//Structs
 struct Emitter
 {
     float3 position;
@@ -11,20 +18,36 @@ struct Emitter
     int channel;
 };
 
+struct Area
+{
+	float distance;
+	float2 coords;
+	int id;
+};
+
+//Buffers
+StructuredBuffer<Emitter> _Emitters;
+StructuredBuffer<float4> _Colors;
+RWStructuredBuffer<float> _Distances;
+
+//
+StructuredBuffer<Area> _AreasRead;
+RWStructuredBuffer<Area> _AreasWrite;
+
 float _Metaball_Smooth;
 int _EmitterCount;
-StructuredBuffer<Emitter> _Emitters;
-RWStructuredBuffer<float4> _Distances;
-uint _ChannelCount;
+int _ChannelCount;
 float2 _InvMapSize;
 RWTexture2D<float4> _Result;
+Texture2D<float> _BorderGradient;
 int _MapSize;
-float4 _Colors[16];
-int _JumpFloodingStepCount;
-int _JumpFloodingStep;
-float _BorderSize;
+int _JumpFloodingStepSize;
+float _BorderPower;
+SamplerState linear_clamp_sampler;
+int _BorderMode;	//0 = NoBorder, 1 = GroupAllAreas, 2 = SplitAreas
 
-//smin from Inigo Quilez
+
+//Exponential smooth min Inigo Quilez - https://iquilezles.org/articles/smin/
 float smin(float a, float b, float k)
 {
     float res = exp2(-k * a) + exp2(-k * b);
@@ -35,111 +58,142 @@ float smin(float a, float b, float k)
 void Clear(uint3 id : SV_DispatchThreadID)
 {
     int i = id.z * _MapSize * _MapSize + id.x * _MapSize + id.y;
-    _Distances[i] = float4(1, 1, id.xy * _InvMapSize);
+    _Distances[i] = 2;
 }
 
 [numthreads(8,8,1)]
-void AsignAreas (uint3 id : SV_DispatchThreadID)
+void AsignAreas (int3 id : SV_DispatchThreadID)
 {
-    float2 pos = id.xy * _InvMapSize * 2.0 - 1.0;
+    float2 position = id.xy * _InvMapSize * 2.0 - 1.0;
 
-    for (uint j = 0; j < _EmitterCount; j++)
+    for (int j = 0; j < _EmitterCount; j++)
     {
         Emitter emitter = _Emitters[j];
-        float dist = distance(pos, emitter.position.xz);
+		float dist = distance(position, emitter.position.xz);
         float factor = dist - emitter.radius;
-
         int i = emitter.channel * _MapSize * _MapSize + id.x * _MapSize + id.y;
-        _Distances[i].x = smin(_Distances[i].x, factor, _Metaball_Smooth);
+        _Distances[i] = smin(_Distances[i], factor, _Metaball_Smooth);
     }
 }
 
 [numthreads(8, 8, 1)]
-void Flatten(uint3 id : SV_DispatchThreadID)
+void Flatten(int3 id : SV_DispatchThreadID)
 {
     float distance = 1;
     int channel = -1;
+	int i = id.x * _MapSize + id.y;
 
-    for (uint j = 0; j < _ChannelCount; j++)
+    for (int j = 0; j < _ChannelCount; j++)
     {
         int i = j * _MapSize * _MapSize + id.x * _MapSize + id.y;
-        if (_Distances[i].x < distance)
+        if (_Distances[i] < distance)
         {
-            distance = _Distances[i].x;
+            distance = _Distances[i];
             channel = j;
-        }
+		}
     }
-
-    for (uint j = 0; j < _ChannelCount; j++)
-    {
-        int i = j * _MapSize * _MapSize + id.x * _MapSize + id.y;
-        if (j == channel && _Distances[i].x < 0)
-            _Distances[i].yzw = 999.0;
-        else
-            _Distances[i].y = 0.0;
-    }
+    
+	Area area;
+	area.id = channel;
+    if (distance < 0)
+	{
+		area.coords = MaxValue;
+		area.distance = MaxValue;
+	}
+    else
+	{
+		area.coords = id.xy * _InvMapSize;
+		area.distance = 0.0;
+	}
+	_AreasWrite[i] = area;
 }
 
 
-[numthreads(8, 8, 8)]
-void JumpFlooding(uint3 id : SV_DispatchThreadID)
+[numthreads(8, 8, 1)]
+void JumpFlooding(int3 id : SV_DispatchThreadID)
 {
-    float level = clamp(_JumpFloodingStep - 1.0, 0.0, _JumpFloodingStepCount);
-    int stepwidth = int(exp2(_JumpFloodingStepCount - level) + 0.5);
+	int jumSize = _JumpFloodingStepSize;
 
-    int2 tc = id.xy;
+	int2 pos = id.xy;
+	int i = id.x * _MapSize + id.y;
+	Area current = _AreasRead[i];
+	float2 center = float2(pos * _InvMapSize);
+	current.distance = distance(current.coords, center);
 
-    float best_dist = 999.0;
-    float2 best_coord = float2(0.0, 0.0);
-    float2 center = float2(id.xy * _InvMapSize);
+    
+	if (current.distance < 0)
+		return;
 
-    for (int y = -1; y <= 1; ++y) 
-    {
-        for (int x = -1; x <= 1; ++x) 
-        {
-            int2 fc = tc + int2(x, y) * stepwidth;
-            float4 ntc = _Distances[id.z * _MapSize * _MapSize + clamp(fc.x, 0, _MapSize - 1) * _MapSize + clamp(fc.y, 0, _MapSize - 1)];
-            float d = length(ntc.zw - center);
-            if (d < best_dist) 
-            {
-                best_dist = d;
-                best_coord = ntc.zw;
-            }
-        }
-    }
+	for (int y = -1; y <= 1; ++y)
+	{
+		int posY = pos.y + y * jumSize;
+		#ifndef RenderTexBorders 
+		if (posY < 0 || posY >= _MapSize)
+			continue;
+		#endif
 
-    int i = id.z * _MapSize * _MapSize + id.x * _MapSize + id.y;
-    _Distances[i].zw = best_coord;
-    _Distances[i].y = best_dist;
+		for (int x = -1; x <= 1; ++x)
+		{
+			int posX = pos.x + x * jumSize;
+			#ifndef RenderTexBorders 
+			if (posX < 0 || posX >= _MapSize)
+				continue;
+			#endif
+        
+        	Area neighbor = _AreasRead[posX * _MapSize + posY];
+			float d = distance(neighbor.coords, center);
+            
+			//Add borders between areas
+			if (_BorderMode == 2 && neighbor.id != current.id)
+			{
+				neighbor.coords = float2(posX, posY) * _InvMapSize;
+				d = 0;
+			}
+			
+			//Add border on the edge of the render texture
+			#ifdef RenderTexBorders
+			if (min(posX, posY) < 0 || max(posX, posY) >= _MapSize)
+			{
+				neighbor.coords = float2(posX, posY) * _InvMapSize;
+				d = 0;
+			}
+			#endif
+
+			
+			if (d < current.distance)
+			{
+				current.distance = d;
+				current.coords = neighbor.coords;
+			}
+		}
+	}
+    
+	_AreasWrite[i] = current;
 }
 
 [numthreads(8, 8, 1)]
-void Render(uint3 id : SV_DispatchThreadID)
+void Render(int3 id : SV_DispatchThreadID)
 {
-    float4 color = 0.0;
-    float alpha = 0.0;
-    float distance = 999.0;
-    float4 values = 0.0.xxxx;
+	//Get area color & shape
+	Area area = _AreasRead[id.x * _MapSize + id.y];
+	float4 color = _Colors[area.id];
+	float alpha = step(0.0001, area.distance);
+	color.a *= alpha;
+        
+	//Add borders
+	if (_BorderMode != 0)
+	{
+		float borders = _BorderGradient.SampleLevel(linear_clamp_sampler, pow(abs(area.distance), _BorderPower), 0).x;
+		color.a *= borders;
+	}
 
-    for (uint j = 0; j < _ChannelCount; j++)
-    {
-        int i = j * _MapSize * _MapSize + id.x * _MapSize + id.y;
+	//Return result
+	_Result[id.xy] = color;
+}
 
-        if (_Distances[i].x < distance)
-        {
-            distance = _Distances[i].x;
-            color = _Colors[j];
-            alpha = _Distances[i].y;
-            values = _Distances[i];
-        }
-    }
-
-    float shape = step(values.x, 0.0);
-    float border = step(values.y, _BorderSize) * shape;
-    float fade = saturate(1.0 - values.y * 5);
-    fade *= fade;
-    fade *= 0.5;
-    shape *= fade;
-
-    _Result[id.xy] = color * max(shape, border);
+[numthreads(8, 8, 1)]
+void RenderData(int3 id : SV_DispatchThreadID)
+{
+	Area area = _AreasRead[id.x * _MapSize + id.y];
+	_Result[id.xy] = float4(area.id, area.distance, area.coords);
 }
