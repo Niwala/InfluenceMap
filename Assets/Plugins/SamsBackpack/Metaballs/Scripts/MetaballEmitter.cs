@@ -2,12 +2,13 @@
 //Source page of the project : https://niwala.itch.io/metaballs
 
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace SamsBackpack.Metaballs
 {
     public class MetaballEmitter : MonoBehaviour
     {
-        public int channel = 0;
+        public int area = 0;
         public float radius = 1;
 
 #if UNITY_EDITOR
@@ -31,8 +32,8 @@ namespace SamsBackpack.Metaballs
                 return;
 
             MetaballsBlitter blitter = GetComponentInParent<MetaballsBlitter>();
-            if (blitter != null && channel >= 0 && blitter.colors.Length > channel)
-                gizmoColor = blitter.colors[channel];
+            if (blitter != null && area >= 0 && blitter.colors.Length > area)
+                gizmoColor = blitter.colors[area];
         }
 
         private void OnDrawGizmos()

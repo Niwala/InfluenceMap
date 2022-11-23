@@ -199,7 +199,7 @@ namespace SamsBackpack.Metaballs
             {
                 Vector3 p = -w2l.MultiplyPoint(emitter.transform.position) / (range * 0.5f);
                 float r = emitter.radius / (range * 0.5f) * emitter.transform.localScale.x;
-                emitterInfosArray[i] = new EmitterInfo(p, r, (int)emitter.channel);
+                emitterInfosArray[i] = new EmitterInfo(p, r, (int)emitter.area);
                 i++;
             }
             emitterInfosBuffer.SetData(emitterInfosArray);
