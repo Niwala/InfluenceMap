@@ -1,3 +1,6 @@
+//Metaballs © 2022 by Sam's Backpack is licensed under CC BY-SA 4.0 (http://creativecommons.org/licenses/by-sa/4.0/)
+//Source page of the project : https://niwala.itch.io/metaballs
+
 Shader "Unlit/Metaballs_Upscaling"
 {
     SubShader
@@ -24,8 +27,9 @@ Shader "Unlit/Metaballs_Upscaling"
                 float4 vertex : SV_POSITION;
             };
 
-            sampler2D _BorderGradient;
-            sampler2D _RenderData;
+            Texture2D _BorderGradient;
+            Texture2D _RenderData;
+            SamplerState sampler_linear_clamp;
             StructuredBuffer<float4> _Colors;
             int _BorderMode;
             float _BorderPower;
@@ -38,9 +42,9 @@ Shader "Unlit/Metaballs_Upscaling"
                 return o;
             }
 
-            float4 frag (v2f i) : SV_Target
+            float4 frag(v2f i) : SV_Target
             {
-                float4 area = tex2D(_RenderData, i.uv);//x = id, y = distance, zw = coords
+                float4 area = _RenderData.Sample(sampler_linear_clamp, i.uv);// tex2D(_RenderData, i.uv);//x = id, y = distance, zw = coords
 
                 //Get area color & shape
 	            float4 color = _Colors[(int)area.x];
@@ -50,7 +54,7 @@ Shader "Unlit/Metaballs_Upscaling"
 	            //Add borders
 	            if (_BorderMode != 0)
 	            {
-		            float borders = tex2D(_BorderGradient, pow(abs(area.y), _BorderPower)).x;
+		            float borders = _BorderGradient.Sample(sampler_linear_clamp, float2(pow(abs(area.y), _BorderPower), 0.5)).x;
 		            color.a *= borders;
 	            }
 

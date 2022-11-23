@@ -1,3 +1,6 @@
+//Metaballs by Sam's Backpack is licensed under CC BY-SA 4.0 (http://creativecommons.org/licenses/by-sa/4.0/)
+//Source page of the project : https://niwala.itch.io/metaballs
+
 #pragma kernel Clear
 #pragma kernel AsignAreas
 #pragma kernel Flatten
@@ -155,7 +158,7 @@ void JumpFlooding(int3 id : SV_DispatchThreadID)
 			if (min(posX, posY) < 0 || max(posX, posY) >= _MapSize)
 			{
 				neighbor.coords = float2(posX, posY) * _InvMapSize;
-				d = 0;
+				//d = 0;
 			}
 			#endif
 
