@@ -11,10 +11,8 @@ namespace SamsBackpack.Metaballs
         public int area = 0;
         public float radius = 1;
 
-#if UNITY_EDITOR
         [SerializeField, HideInInspector]
         private Color gizmoColor;
-#endif
 
         private void OnEnable()
         {
