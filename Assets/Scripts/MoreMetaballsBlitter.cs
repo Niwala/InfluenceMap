@@ -62,14 +62,6 @@ public class MoreMetaballsBlitter : MonoBehaviour
         result.enableRandomWrite = true;
         result.filterMode = FilterMode.Bilinear;
 
-        if (m_useUpscaledVersion)
-        {
-            upscaledResult = new RenderTexture(m_renderTexSize, m_renderTexSize, 0, RenderTextureFormat.ARGBFloat);
-            upscaledResult.enableRandomWrite = true;
-            upscaledResult.filterMode = FilterMode.Bilinear;
-            m_upscaleMaterial = new Material(m_upscaleShader);
-        }
-
         emitterInfosBuffer = new ComputeBuffer(maxEmitterCount, EmitterInfo.stride);
         emitterInfosArray = new EmitterInfo[maxEmitterCount];
 
@@ -79,6 +71,7 @@ public class MoreMetaballsBlitter : MonoBehaviour
         colorBuffer = new ComputeBuffer(colors.Length, sizeof(float) * 4);
         colorBuffer.SetData(colors);
 
+        UpdateUpscaleBuffer();
         BuildBorderGradient();
     }
 
@@ -97,6 +90,7 @@ public class MoreMetaballsBlitter : MonoBehaviour
 
     private void OnValidate()
     {
+        UpdateUpscaleBuffer();
         BuildBorderGradient();
     }
 
@@ -110,6 +104,25 @@ public class MoreMetaballsBlitter : MonoBehaviour
             borderGradient.SetPixel(i, 0, Color.white * borderOpacity.Evaluate(t));
         }
         borderGradient.Apply();
+    }
+
+    private void UpdateUpscaleBuffer()
+    {
+        if (m_useUpscaledVersion)
+        {
+            upscaledResult = new RenderTexture(m_renderTexSize, m_renderTexSize, 0, RenderTextureFormat.ARGBFloat);
+            upscaledResult.enableRandomWrite = true;
+            upscaledResult.filterMode = FilterMode.Bilinear;
+            m_upscaleMaterial = new Material(m_upscaleShader);
+        }
+        else
+        {
+            if (upscaledResult != null)
+                upscaledResult.Release();
+
+            if (m_upscaleMaterial != null)
+                DestroyImmediate(m_upscaleMaterial);
+        }
     }
 
     struct EmitterInfo
@@ -225,6 +238,7 @@ public class MoreMetaballsBlitter : MonoBehaviour
             m_upscaleMaterial.SetInt("_BorderMode", (int) borderMode);
             m_upscaleMaterial.SetFloat("_BorderPower", borderRange);
 
+            Graphics.Blit(Texture2D.whiteTexture, upscaledResult);
             Graphics.Blit(result, upscaledResult, m_upscaleMaterial);
 
             //Draw result on the renderer

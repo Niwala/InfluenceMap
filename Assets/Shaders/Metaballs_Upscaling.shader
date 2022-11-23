@@ -1,19 +1,11 @@
 Shader "Unlit/Metaballs_Upscaling"
 {
-    Properties
-    {
-        _MainTex ("Texture", 2D) = "white" {}
-    }
     SubShader
     {
         Tags { "RenderType"="Opaque" }
 
         Pass
         {
-            Blend SrcAlpha OneMinusSrcAlpha
-            ZWrite Off
-            ZTest Always
-
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -46,7 +38,7 @@ Shader "Unlit/Metaballs_Upscaling"
                 return o;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            float4 frag (v2f i) : SV_Target
             {
                 float4 area = tex2D(_RenderData, i.uv);//x = id, y = distance, zw = coords
 
