@@ -1,7 +1,7 @@
 //Metaballs © 2022 by Sam's Backpack is licensed under CC BY-SA 4.0 (http://creativecommons.org/licenses/by-sa/4.0/)
 //Source page of the project : https://niwala.itch.io/metaballs
 
-Shader "Unlit/Metaballs_Upscaling"
+Shader "hidden/Metaballs_Upscaling"
 {
     SubShader
     {
@@ -23,16 +23,18 @@ Shader "Unlit/Metaballs_Upscaling"
             struct v2f
             {
                 float2 uv : TEXCOORD0;
-                UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
             };
 
-            Texture2D _BorderGradient;
-            Texture2D _RenderData;
-            SamplerState sampler_linear_clamp;
-            StructuredBuffer<float4> _Colors;
+            //Borders
             int _BorderMode;
             float _BorderPower;
+            Texture2D _BorderGradient;
+
+            //Data
+            Texture2D _RenderData;
+            SamplerState sampler_linear_clamp;
+            StructuredBuffer<float4> _AreaColors;
 
             v2f vert (appdata v)
             {
@@ -42,12 +44,12 @@ Shader "Unlit/Metaballs_Upscaling"
                 return o;
             }
 
-            float4 frag(v2f i) : SV_Target
+            half4 frag(v2f i) : SV_Target
             {
-                float4 area = _RenderData.Sample(sampler_linear_clamp, i.uv);// tex2D(_RenderData, i.uv);//x = id, y = distance, zw = coords
+                float4 area = _RenderData.Sample(sampler_linear_clamp, i.uv);//x = id, y = distance, zw = coords
 
                 //Get area color & shape
-	            float4 color = _Colors[(int)area.x];
+	            float4 color = _AreaColors[(int)area.x];
 	            float alpha = step(0.0001, area.y);
 	            color.a *= alpha;
         

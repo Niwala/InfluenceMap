@@ -1,6 +1,6 @@
 //Metaballs by Sam's Backpack is licensed under CC BY-SA 4.0 (http://creativecommons.org/licenses/by-sa/4.0/)
 //Source page of the project : https://niwala.itch.io/metaballs
-
+ 
 #pragma kernel Clear
 #pragma kernel AsignAreas
 #pragma kernel Flatten
@@ -28,26 +28,27 @@ struct Area
 	int id;
 };
 
-//Buffers
-StructuredBuffer<Emitter> _Emitters;
-StructuredBuffer<float4> _Colors;
-RWStructuredBuffer<float> _Distances;
+//Properties
+StructuredBuffer<Emitter> _Emitters;		//Contains the information of all emitters that must be written in the texture.
+int _EmitterCount;							//
 
-//
-StructuredBuffer<Area> _AreasRead;
-RWStructuredBuffer<Area> _AreasWrite;
+StructuredBuffer<float4> _AreaColors;		//
+int _AreaCount;								//
 
-float _Metaball_Smooth;
-int _EmitterCount;
-int _ChannelCount;
-float2 _InvMapSize;
-RWTexture2D<float4> _Result;
-Texture2D<float> _BorderGradient;
-int _MapSize;
-int _JumpFloodingStepSize;
-float _BorderPower;
-SamplerState linear_clamp_sampler;
-int _BorderMode;	//0 = NoBorder, 1 = GroupAllAreas, 2 = SplitAreas
+RWStructuredBuffer<float> _DistanceFields;	//Distance field for each arena.
+StructuredBuffer<Area> _AreasRead;			//Flattened version of all distance fields. (Read only)
+RWStructuredBuffer<Area> _AreasWrite;		//Flattened version of all distance fields. (Write only)
+
+float _Smoothing;							//Smoothing factor between the different emitters
+int _BorderMode;							//0 = NoBorder, 1 = GroupAllAreas, 2 = SplitAreas
+float _BorderPower;							//
+int _JumpFloodingStepSize;					//The pixel size of the jump for JumpFlooding.
+Texture2D<float> _BorderGradient;			//1D texture containing a gradient to draw the edges of the areas.
+SamplerState linear_clamp_sampler;			//
+
+int _MapSize;								//The size of the computed texture
+float2 _InvMapSize;							//1.0 / The size of the computed texture
+RWTexture2D<float4> _Result;				//The final result
 
 
 //Exponential smooth min Inigo Quilez - https://iquilezles.org/articles/smin/
@@ -61,7 +62,7 @@ float smin(float a, float b, float k)
 void Clear(uint3 id : SV_DispatchThreadID)
 {
     int i = id.z * _MapSize * _MapSize + id.x * _MapSize + id.y;
-    _Distances[i] = 2;
+    _DistanceFields[i] = MaxValue;
 }
 
 [numthreads(8,8,1)]
@@ -75,7 +76,7 @@ void AsignAreas (int3 id : SV_DispatchThreadID)
 		float dist = distance(position, emitter.position.xz);
         float factor = dist - emitter.radius;
         int i = emitter.channel * _MapSize * _MapSize + id.x * _MapSize + id.y;
-        _Distances[i] = smin(_Distances[i], factor, _Metaball_Smooth);
+        _DistanceFields[i] = smin(_DistanceFields[i], factor, _Smoothing);
     }
 }
 
@@ -86,12 +87,12 @@ void Flatten(int3 id : SV_DispatchThreadID)
     int channel = -1;
 	int i = id.x * _MapSize + id.y;
 
-    for (int j = 0; j < _ChannelCount; j++)
+    for (int j = 0; j < _AreaCount; j++)
     {
         int i = j * _MapSize * _MapSize + id.x * _MapSize + id.y;
-        if (_Distances[i] < distance)
+        if (_DistanceFields[i] < distance)
         {
-            distance = _Distances[i];
+            distance = _DistanceFields[i];
             channel = j;
 		}
     }
@@ -179,7 +180,7 @@ void Render(int3 id : SV_DispatchThreadID)
 {
 	//Get area color & shape
 	Area area = _AreasRead[id.x * _MapSize + id.y];
-	float4 color = _Colors[area.id];
+	float4 color = _AreaColors[area.id];
 	float alpha = step(0.0001, area.distance);
 	color.a *= alpha;
         

@@ -52,5 +52,23 @@ namespace SamsBackpack.Metaballs
             }
         }
 
+        private void OnDrawGizmosSelected()
+        {
+            Gizmos.matrix = transform.localToWorldMatrix;
+            Color color = Color.white;
+            color.a = 0.7f;
+            Gizmos.color = color;
+            float radius = this.radius - 0.1f;
+
+            Vector3 p0 = new Vector3(1.0f, 0.0f, 0.0f) * radius;
+            for (float t = 0; t < 1.0f; t += 0.02f)
+            {
+                float a = t * Mathf.PI * 2.0f;
+                Vector3 p1 = new Vector3(Mathf.Cos(a), 0.0f, Mathf.Sin(a)) * radius;
+                Gizmos.DrawLine(p0, p1);
+                p0 = p1;
+            }
+        }
+
     }
 }
