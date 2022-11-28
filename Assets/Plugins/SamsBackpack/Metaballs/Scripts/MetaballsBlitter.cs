@@ -6,6 +6,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Experimental.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace SamsBackpack.Metaballs
 {
@@ -62,6 +64,14 @@ namespace SamsBackpack.Metaballs
         public HashSet<MetaballEmitter> emitters = new HashSet<MetaballEmitter>();
         private Texture2D borderGradient;
 
+        private void OnGUI()
+        {
+            GUI.Box(new Rect(10, 10, 200, 80), 
+                "R8 : " + SystemInfo.SupportsTextureFormat(TextureFormat.R8) +
+                "\nARGBFloat : " + SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBFloat) +
+                "\nCompute buffers : "+ SystemInfo.supportsComputeShaders);
+        }
+
         private void OnEnable()
         {
             AllocateBuffers();
@@ -87,7 +97,7 @@ namespace SamsBackpack.Metaballs
         public void BuildBorderGradient()
         {
             const int gradientResolution = 512;
-            borderGradient = new Texture2D(gradientResolution, 1, TextureFormat.R8, false);
+            borderGradient = new Texture2D(gradientResolution, 1, GraphicsFormat.R8_UNorm, TextureCreationFlags.None);
             for (int i = 0; i < gradientResolution; i++)
             {
                 float t = i / (gradientResolution - 1.0f);
