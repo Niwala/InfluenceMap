@@ -19,7 +19,22 @@ namespace SamsBackpack.Metaballs
         [Header("Components")]
         [SerializeField] private MeshRenderer rend;
         [SerializeField] private Shader shader;
-        private Material material;
+        public Material material;
+        public RenderTexture swapTex;
+
+        protected override void AllocateBuffers()
+        {
+            base.AllocateBuffers();
+            swapTex = new RenderTexture(m_computeTexSize, m_computeTexSize, 0, RenderTextureFormat.ARGBFloat);
+            swapTex.enableRandomWrite = true;
+            swapTex.filterMode = FilterMode.Bilinear;
+        }
+
+        protected override void ReleaseBuffers()
+        {
+            base.ReleaseBuffers();
+            swapTex.Release();
+        }
 
         protected void Update()
         {
@@ -30,12 +45,12 @@ namespace SamsBackpack.Metaballs
             {
                 Vector3 p = -w2l.MultiplyPoint(emitter.transform.position) / (range * 0.5f);
                 float r = emitter.radius / (range * 0.5f) * emitter.transform.localScale.x;
-                emitterInfosArray[i] = new EmitterInfo(p, r, (int)emitter.area);
+                emitterInfosArray[i] = new EmitterInfo(p, r, emitter.area);
                 i++;
             }
             emitterInfosBuffer.SetData(emitterInfosArray);
 
-
+            Graphics.ClearRandomWriteTargets();
             bool areasBufferSwap = false;
 
             if (material == null)
@@ -51,19 +66,23 @@ namespace SamsBackpack.Metaballs
             material.SetFloat(ShaderProperties.smoothing, smooth);
             material.SetFloat(ShaderProperties.borderPower, borderRange);
             material.SetBuffer(ShaderProperties.emitters, emitterInfosBuffer);
+            material.SetBuffer(ShaderProperties.areaColors, colorBuffer);
             material.SetBuffer(ShaderProperties.distanceFields, distancePerArea);
+            Graphics.SetRandomWriteTarget(1, distancePerArea);
+
 
             //Clear data
-            Graphics.Blit(Texture2D.blackTexture, result, material, 0);
+            Graphics.Blit(swapTex, result, material, 0);
 
             //Asign areas
-            Graphics.Blit(Texture2D.blackTexture, result, material, 1);
+            Graphics.Blit(result, swapTex, material, 1);
+
 
             //Flatten
-            material.SetBuffer(ShaderProperties.distanceFields, distancePerArea);
-            material.SetBuffer(ShaderProperties.areaRead, areasBufferSwap ? areasB : areasA);
             material.SetBuffer(ShaderProperties.areaWrite, areasBufferSwap ? areasA : areasB);
-            Graphics.Blit(Texture2D.blackTexture, result, material, 2);
+            Graphics.SetRandomWriteTarget(2, areasA);
+            Graphics.SetRandomWriteTarget(3, areasB);
+            Graphics.Blit(swapTex, result, material, 2);
             areasBufferSwap = !areasBufferSwap;
 
             //Jump flooding
@@ -72,13 +91,19 @@ namespace SamsBackpack.Metaballs
                 int itterationCount = (int)m_computeResolution;
                 for (int j = 0; j < itterationCount; j++)
                 {
+                    material.SetInt(ShaderProperties.jumpFloodingStepSize, (int)Mathf.Pow(2, ((int)m_computeResolution) - (j + 1)));
                     material.SetBuffer(ShaderProperties.areaRead, areasBufferSwap ? areasB : areasA);
                     material.SetBuffer(ShaderProperties.areaWrite, areasBufferSwap ? areasA : areasB);
-                    material.SetInt(ShaderProperties.jumpFloodingStepSize, (int)Mathf.Pow(2, ((int)m_computeResolution) - (j + 1)));
-                    Graphics.Blit(Texture2D.blackTexture, result, material, 3);
+                    //Graphics.SetRandomWriteTarget(2, areasBufferSwap ? areasA : areasB);
+                    Graphics.Blit(areasBufferSwap ? result : swapTex, areasBufferSwap ? swapTex : result, material, 3);
                     areasBufferSwap = !areasBufferSwap;
                 }
             }
+
+            //Draw result on the renderer
+            if (rend != null)
+                rend.sharedMaterial.mainTexture = areasBufferSwap ? result : swapTex;
+            return;
 
 
             //Upscale render
@@ -108,12 +133,14 @@ namespace SamsBackpack.Metaballs
             ////Direct Render
             //else
             {
+
                 //Render pass
+                material.SetBuffer(ShaderProperties.distanceFields, distancePerArea);
                 material.SetTexture(ShaderProperties.borderGradient, borderGradient);
-                material.SetTexture(ShaderProperties.result, result);
+                //material.SetTexture(ShaderProperties.result, result);
                 material.SetBuffer(ShaderProperties.areaRead, areasBufferSwap ? areasB : areasA);
                 material.SetBuffer(ShaderProperties.areaColors, colorBuffer);
-                Graphics.Blit(Texture2D.blackTexture, result, material, 4);
+                Graphics.Blit(swapTex, result, material, 4);
 
 
                 //Draw result on the renderer

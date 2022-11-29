@@ -5,8 +5,6 @@ Shader "hidden/Metaballs_FragShader"
 {
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
-
         //Clear
         Pass
         {
@@ -52,6 +50,9 @@ Shader "hidden/Metaballs_FragShader"
                     int i = emitter.channel * _MapSize * _MapSize + id.x * _MapSize + id.y;
                     _DistanceFields[i] = smin(_DistanceFields[i], factor, _Smoothing);
                 }
+
+                int i2 = id.x * _MapSize + id.y;
+                _DistanceFields[i2] = _Emitters[3].position.x * 100;
                 return 0;
             }
             ENDCG
@@ -92,6 +93,7 @@ Shader "hidden/Metaballs_FragShader"
                     area.coords = id.xy * _InvMapSize;
                     area.distance = 0.0;
                 }
+                _DistanceFields[i] = 1;
                 _AreasWrite[i] = area;
                 return 0;
             }
@@ -161,7 +163,7 @@ Shader "hidden/Metaballs_FragShader"
                 }
 
                 _AreasWrite[i] = current;
-                return 0;
+                return float4(current.distance, 0, 0, 1);
             }
             ENDCG
         }
@@ -189,8 +191,13 @@ Shader "hidden/Metaballs_FragShader"
                 }
 
                 //Return result
-                _Result[id.xy] = color;
-                return 0;
+                //_Result[id.xy] = color;
+                //if (id.y == 5 && id.x == 25)
+                //    return float4(1, 0, 0, 1);
+
+                //color = float4(_DistanceFields[50], 0.2, 0, 1);
+
+                return color;
             }
             ENDCG
         }

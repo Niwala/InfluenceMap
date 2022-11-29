@@ -277,7 +277,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &497680439
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -752,6 +752,8 @@ MonoBehaviour:
   - {r: 0.4332013, g: 1.8602173, b: 2.433572, a: 1}
   rend: {fileID: 1467252014}
   shader: {fileID: 4800000, guid: c921decdc838cba46a583fd6807504dd, type: 3}
+  material: {fileID: 0}
+  swapTex: {fileID: 0}
 --- !u!33 &1467252013
 MeshFilter:
   m_ObjectHideFlags: 0

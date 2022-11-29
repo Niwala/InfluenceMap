@@ -16,12 +16,12 @@ namespace SamsBackpack.Metaballs
 
         private void OnEnable()
         {
-            GetComponentInParent<MetaballsBlitter>()?.emitters.Add(this);
+            GetComponentInParent<MetaballsRenderer>()?.emitters.Add(this);
         }
 
         private void OnDisable()
         {
-            GetComponentInParent<MetaballsBlitter>()?.emitters.Remove(this);
+            GetComponentInParent<MetaballsRenderer>()?.emitters.Remove(this);
         }
 
         private void OnValidate()
@@ -29,9 +29,9 @@ namespace SamsBackpack.Metaballs
             if (!Application.isPlaying)
                 return;
 
-            MetaballsBlitter blitter = GetComponentInParent<MetaballsBlitter>();
-            if (blitter != null && area >= 0 && blitter.colors.Length > area)
-                gizmoColor = blitter.colors[area];
+            MetaballsRenderer renderer = GetComponentInParent<MetaballsRenderer>();
+            if (renderer != null && area >= 0 && renderer.colors.Length > area)
+                gizmoColor = renderer.colors[area];
         }
 
         private void OnDrawGizmos()

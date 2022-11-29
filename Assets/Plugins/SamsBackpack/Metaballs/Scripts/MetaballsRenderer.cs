@@ -82,8 +82,11 @@ namespace SamsBackpack.Metaballs
             if (m_renderResolution < m_computeResolution)
                 m_renderResolution = m_computeResolution;
 
-            AllocateBuffers();
-            BuildBorderGradient();
+            if (Application.isPlaying)
+            {
+                AllocateBuffers();
+                BuildBorderGradient();
+            }
         }
 
         public virtual void BuildBorderGradient()
