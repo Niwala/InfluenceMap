@@ -11,7 +11,7 @@ using UnityEngine.Rendering.Universal;
 
 namespace SamsBackpack.Metaballs
 {
-    public class MetaballsBlitter : MonoBehaviour
+    public class MetaballsBlitter : MetaballsRenderer
     {
         [Header("Components")]
         [SerializeField] private MeshRenderer rend;
@@ -19,135 +19,16 @@ namespace SamsBackpack.Metaballs
         [SerializeField] private Shader m_upscaleShader;
         private Material m_upscaleMaterial;
 
-        [Header("Settings")]
 
-        //Resolutions
-        [SerializeField, Tooltip("The size of the buffers in which all computations will be performed.")]
-        private texSize m_computeResolution = texSize._512;
-        private int m_computeTexSize { get => (int)Mathf.Pow(2, (int)m_computeResolution); }
-        [SerializeField, Tooltip("The size of the final rendering texture. Should be the same size or larger than the Compute Resolution.")]
-        private texSize m_renderResolution = texSize._512;
-        private int m_renderTexSize { get => (int)Mathf.Pow(2, (int)m_renderResolution); }
-        private bool m_useUpscaledVersion { get => m_computeResolution != m_renderResolution; }
-
-
-
-        [Tooltip("Max. number of emitters If there are more emitters, they will be ignored.")]
-        public int maxEmitterCount = 64;
-
-        [Tooltip("Range of the area. Emitters outside this area will not be drawn.")]
-        public float range = 10.0f;
-
-        [Tooltip("Smoothness of the metaballs.")]
-        public float smooth = 25.0f;
-
-        [Header("Borders")]
-        public BorderMode borderMode = BorderMode.SplitAreas;
-        public AnimationCurve borderOpacity;
-        [Tooltip("Thickness of the edges around blobs."), Range(0.1f, 5f)]
-        public float borderRange = 0.3f;
-
-
-        [ColorUsage(true, true)]
-        public Color[] colors = new Color[4];
-
-        //Hidden
-        private RenderTexture result;
-        private RenderTexture upscaledResult;
-        private ComputeBuffer emitterInfosBuffer;
-        private EmitterInfo[] emitterInfosArray;
-        private ComputeBuffer distancePerArea;
-        private ComputeBuffer areasA;
-        private ComputeBuffer areasB;
-        private ComputeBuffer colorBuffer;
-        [HideInInspector]
-        public HashSet<MetaballEmitter> emitters = new HashSet<MetaballEmitter>();
-        private Texture2D borderGradient;
-
-        private void OnGUI()
+        protected override void OnEnable()
         {
-            GUI.Box(new Rect(10, 10, 200, 80), 
-                "R8 : " + SystemInfo.SupportsTextureFormat(TextureFormat.R8) +
-                "\nARGBFloat : " + SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBFloat) +
-                "\nCompute buffers : "+ SystemInfo.supportsComputeShaders);
-        }
+            base.OnEnable();
 
-        private void OnEnable()
-        {
-            AllocateBuffers();
-            UpdateUpscaleBuffer();
-            BuildBorderGradient();
-        }
 
-        private void OnDisable()
-        {
-            ReleaseBuffers();
-        }
-
-        private void OnValidate()
-        {
-            if (m_renderResolution < m_computeResolution)
-                m_renderResolution = m_computeResolution;
-
-            AllocateBuffers();
-            UpdateUpscaleBuffer();
-            BuildBorderGradient();
-        }
-
-        public void BuildBorderGradient()
-        {
-            const int gradientResolution = 512;
-            borderGradient = new Texture2D(gradientResolution, 1, GraphicsFormat.R8_UNorm, TextureCreationFlags.None);
-            for (int i = 0; i < gradientResolution; i++)
+            if (Application.isPlaying)
             {
-                float t = i / (gradientResolution - 1.0f);
-                borderGradient.SetPixel(i, 0, Color.white * borderOpacity.Evaluate(t));
+                UpdateUpscaleBuffer();
             }
-            borderGradient.Apply();
-        }
-
-        private void AllocateBuffers()
-        {
-            bool rebuildBuffer = ((result != null && result.width != m_computeTexSize) || (colorBuffer != null && colorBuffer.count != colors.Length));
-            if (rebuildBuffer)
-            {
-                ReleaseBuffers();
-            }
-            else
-            {
-                if (result != null)
-                    return;
-            }
-
-            result = new RenderTexture(m_computeTexSize, m_computeTexSize, 0, RenderTextureFormat.ARGBFloat);
-            result.enableRandomWrite = true;
-            result.filterMode = FilterMode.Bilinear;
-
-            emitterInfosBuffer = new ComputeBuffer(maxEmitterCount, EmitterInfo.stride);
-            emitterInfosArray = new EmitterInfo[maxEmitterCount];
-
-            areasA = new ComputeBuffer(m_computeTexSize * m_computeTexSize, AreaInfo.stride);
-            areasB = new ComputeBuffer(m_computeTexSize * m_computeTexSize, AreaInfo.stride);
-
-            distancePerArea = new ComputeBuffer(m_computeTexSize * m_computeTexSize * colors.Length, sizeof(float));
-            colorBuffer = new ComputeBuffer(colors.Length, sizeof(float) * 4);
-            colorBuffer.SetData(colors);
-        }
-
-        private void ReleaseBuffers()
-        {
-            if (result == null)
-                return;
-
-            result.Release();
-            if (upscaledResult != null)
-                upscaledResult.Release();
-
-            emitterInfosBuffer.Release();
-            distancePerArea.Release();
-            areasA.Release();
-            areasB.Release();
-            colorBuffer.Release();
         }
 
         private void UpdateUpscaleBuffer()
@@ -166,37 +47,6 @@ namespace SamsBackpack.Metaballs
 
                 if (m_upscaleMaterial != null)
                     DestroyImmediate(m_upscaleMaterial);
-            }
-        }
-
-        struct EmitterInfo
-        {
-            public Vector3 position;
-            public float range;
-            public int channel;
-
-            public EmitterInfo(Vector3 position, float range, int channel)
-            {
-                this.position = position;
-                this.range = range;
-                this.channel = channel;
-            }
-
-            public static int stride
-            {
-                get { return sizeof(float) * 4 + sizeof(int); }
-            }
-        }
-
-        struct AreaInfo
-        {
-            public float distance;
-            public Vector2 coords;
-            public int id;
-
-            public static int stride
-            {
-                get { return sizeof(float) * 3 + sizeof(int); }
             }
         }
 
@@ -304,35 +154,6 @@ namespace SamsBackpack.Metaballs
                 if (rend != null)
                     rend.sharedMaterial.mainTexture = result;
             }
-        }
-
-        private void OnDrawGizmos()
-        {
-            Gizmos.matrix = transform.localToWorldMatrix;
-            Vector3 size = Vector3.one * range;
-            size.y = 0.01f;
-
-            Gizmos.color = Color.magenta;
-            Gizmos.DrawWireCube(Vector3.zero, size);
-        }
-
-        public enum texSize
-        {
-            _32 = 5,
-            _64 = 6,
-            _128 = 7,
-            _256 = 8,
-            _512 = 9,
-            _1024 = 10,
-            _2048 = 11,
-            _4096 = 12
-        }
-
-        public enum BorderMode
-        {
-            NoBorders,
-            GroupAllAreas,
-            SplitAreas
         }
     }
 }
